@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Till Practice</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { font-family: Arial, sans-serif; background-color: #000; color: #fff; height: 100vh; display: flex; }
+        
+        /* Main Layout */
+        .till-container { display: flex; width: 100%; height: 100%; padding: 10px; gap: 15px; }
+        .left-panel { flex: 7; display: flex; flex-direction: column; gap: 10px; }
+        .right-panel { flex: 3; display: flex; flex-direction: column; background-color: #1a1a1a; border-radius: 8px; padding: 10px; gap: 10px; }
+
+        /* Left Panel - Grids */
+        .category-grid, .subcategory-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        .product-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; flex-grow: 1; align-content: start; }
+        
+        /* Buttons */
+        button { 
+            border: none; border-radius: 6px; padding: 12px; font-size: 14px; font-weight: bold; 
+            cursor: pointer; text-align: center; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; min-height: 80px; transition: 0.1s;
+        }
+        button:active { transform: scale(0.96); }
+        
+        .btn-category { background-color: #1e5bbd; color: white; border: 2px solid #2868c7; }
+        .btn-category.active { background-color: #3b82f6; border-color: #fff; }
+        .btn-subcategory { background-color: #2563eb; color: white; min-height: 50px; }
+        .btn-product { background-color: #e5e7eb; color: #111; }
+        
+        /* Right Panel - Ticket */
+        .ticket-area { flex-grow: 1; background-color: #333; border-radius: 6px; padding: 10px; overflow-y: auto; }
+        .ticket-item { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 16px; border-bottom: 1px solid #555; padding-bottom: 4px; }
+        
+        /* Totals Area */
+        .totals-area { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #222; padding: 10px; border-radius: 6px; }
+        .total-row { display: flex; justify-content: space-between; font-size: 18px; grid-column: span 2; }
+        .total-row.grand-total { font-size: 24px; font-weight: bold; border-top: 2px solid #555; padding-top: 5px; }
+        
+        /* Payment Buttons */
+        .payment-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .btn-exact { background-color: #6b7280; color: white; }
+        .btn-cash { background-color: #3b82f6; color: white; }
+        .btn-card { background-color: #8b5cf6; color: white; grid-column: span 2; font-size: 18px; padding: 20px;}
+        .btn-void { background-color: #ef4444; color: white; margin-top: auto; }
+    </style>
+</head>
+<body>
+
+<div class="till-container">
+    <div class="left-panel">
+        <div class="category-grid" id="categoryGrid">
+            </div>
+        <div class="subcategory-grid" id="subcategoryGrid" style="display: none;">
+            </div>
+        <div class="product-grid" id="productGrid">
+            </div>
+    </div>
+
+    <div class="right-panel">
+        <div class="ticket-area" id="ticketList">
+            </div>
+        
+        <div class="totals-area">
+            <div class="total-row"><span>Total</span><span id="displayTotal">£0.00</span></div>
+            <div class="total-row"><span>Tendered</span><span>£0.00</span></div>
+            <div class="total-row grand-total"><span>Amount</span><span id="displayAmount">£0.00</span></div>
+        </div>
+
+        <div class="payment-grid">
+            <button class="btn-exact" onclick="processPayment('exact')">Exact Cash</button>
+            <button class="btn-void" onclick="voidOrder()">Void Order</button>
+            <button class="btn-cash" onclick="processPayment(5)">£5</button>
+            <button class="btn-cash" onclick="processPayment(10)">£10</button>
+            <button class="btn-card" onclick="processPayment('card')">💳 Card</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Database replicating the till structure
+    const menuData = {
+        "Breakfast": {
+            items: [
+                { name: "Bacon Corn Top Roll", price: 2.40 },
+                { name: "Sausage Corn Top Roll", price: 2.40 },
+                { name: "Sausage & Bacon Corn Top Roll", price: 2.70 },
+                { name: "Bacon Baguette", price: 3.50 },
+                { name: "Sausage Baguette", price: 3.50 },
+                { name: "Omelette Baguette", price: 3.50 }
+            ]
+        },
+        "Savoury & Hot Food": {
+            items: [
+                { name: "Steak Bake", price: 2.25 },
+                { name: "Sausage Roll", price: 1.20 },
+                { name: "Vegan Roll", price: 1.20 },
+                { name: "Chicken Bake", price: 2.10 },
+                { name: "Cheese & Onion Bake", price: 1.95 },
+                { name: "Sausage, Bean & Cheese Melt", price: 2.10 },
+                { name: "Pepperoni Pizza Slice", price: 2.50 },
+                { name: "Margherita Pizza Slice", price: 2.40 }
+            ]
+        },
+        "Sweet": {
+            items: [
+                { name: "Triple Chocolate Doughnut", price: 1.25 },
+                { name: "Caramel Custard Doughnut", price: 1.25 },
+                { name: "Glazed Ring Doughnut", price: 1.00 },
+                { name: "Yum Yum", price: 1.30 },
+                { name: "Milk Chocolate Cookie", price: 1.10 }
+            ]
+        },
+        "Hot Drinks": {
+            subcategories: {
+                "Regular Hot Drink": [
+                    { name: "Regular Flat White", price: 2.10 },
+                    { name: "Regular White Coffee", price: 1.90 },
+                    { name: "Regular Black Coffee", price: 1.90 },
+                    { name: "Regular Cappuccino", price: 2.10 },
+                    { name: "Regular Latte", price: 2.10 },
+                    { name: "Regular Tea", price: 1.40 }
+                ],
+                "Large Hot Drink": [
+                    { name: "Large White Coffee", price: 2.30 },
+                    { name: "Large Black Coffee", price: 2.30 },
+                    { name: "Large Cappuccino", price: 2.50 },
+                    { name: "Large Latte", price: 2.50 },
+                    { name: "Large Tea", price: 1.60 }
+                ]
+            }
+        },
+        "Sandwiches": {
+            items: [
+                { name: "Tuna Crunch Baguette", price: 3.60 },
+                { name: "Ham & Cheese Baguette", price: 3.60 },
+                { name: "Roast Chicken Oval Bite", price: 3.30 },
+                { name: "Cheese Ploughmans Oval", price: 3.10 }
+            ]
+        }
+    };
+
+    const categories = ["Breakfast", "Savoury & Hot Food", "Sweet", "Hot Drinks", "Sandwiches"];
+    
+    // State Variables
+    let currentTicket = [];
+    let ticketTotal = 0.00;
+
+    // Initialization
+    window.onload = () => {
+        renderCategories();
+        loadMenu("Savoury & Hot Food"); // Default screen
+    };
+
+    function renderCategories() {
+        const grid = document.getElementById("categoryGrid");
+        grid.innerHTML = "";
+        categories.forEach(cat => {
+            const btn = document.createElement("button");
+            btn.className = "btn-category";
+            btn.innerText = cat;
+            btn.onclick = () => {
+                document.querySelectorAll('.btn-category').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                loadMenu(cat);
+            };
+            grid.appendChild(btn);
+        });
+        // Set first active
+        grid.firstChild.classList.add('active');
+    }
+
+    function loadMenu(categoryName) {
+        const productGrid = document.getElementById("productGrid");
+        const subcategoryGrid = document.getElementById("subcategoryGrid");
+        productGrid.innerHTML = "";
+        subcategoryGrid.innerHTML = "";
+        
+        const categoryData = menuData[categoryName];
+
+        if (categoryData.subcategories) {
+            subcategoryGrid.style.display = "grid";
+            const subcats = Object.keys(categoryData.subcategories);
+            
+            subcats.forEach(sub => {
+                const btn = document.createElement("button");
+                btn.className = "btn-subcategory";
+                btn.innerText = sub;
+                btn.onclick = () => renderProducts(categoryData.subcategories[sub]);
+                subcategoryGrid.appendChild(btn);
+            });
+            // Auto-load first subcategory
+            renderProducts(categoryData.subcategories[subcats[0]]);
+        } else {
+            subcategoryGrid.style.display = "none";
+            renderProducts(categoryData.items);
+        }
+    }
+
+    function renderProducts(itemsArray) {
+        const productGrid = document.getElementById("productGrid");
+        productGrid.innerHTML = "";
+        itemsArray.forEach(item => {
+            const btn = document.createElement("button");
+            btn.className = "btn-product";
+            btn.innerText = item.name;
+            btn.onclick = () => addToTicket(item);
+            productGrid.appendChild(btn);
+        });
+    }
+
+    function addToTicket(item) {
+        // Look for existing item
+        const existing = currentTicket.find(i => i.name === item.name);
+        if (existing) {
+            existing.qty += 1;
+        } else {
+            currentTicket.push({ name: item.name, price: item.price, qty: 1 });
+        }
+        updateTicketDisplay();
+    }
+
+    function updateTicketDisplay() {
+        const list = document.getElementById("ticketList");
+        list.innerHTML = "";
+        ticketTotal = 0;
+
+        currentTicket.forEach(item => {
+            const lineTotal = item.price * item.qty;
+            ticketTotal += lineTotal;
+            
+            const div = document.createElement("div");
+            div.className = "ticket-item";
+            div.innerHTML = `<span>${item.qty} x ${item.name}</span> <span>£${lineTotal.toFixed(2)}</span>`;
+            list.appendChild(div);
+        });
+
+        document.getElementById("displayTotal").innerText = `£${ticketTotal.toFixed(2)}`;
+        document.getElementById("displayAmount").innerText = `£${ticketTotal.toFixed(2)}`;
+    }
+
+    function processPayment(type) {
+        if (ticketTotal === 0) return alert("Ticket is empty!");
+        
+        if (type === 'exact' || type === 'card' || typeof type === 'number') {
+            alert(`Payment of £${ticketTotal.toFixed(2)} processed successfully via ${type}.`);
+            voidOrder(); // Reset after simulated payment
+        }
+    }
+
+    function voidOrder() {
+        currentTicket = [];
+        updateTicketDisplay();
+    }
+</script>
+
+</body>
+</html>
